@@ -1,0 +1,18 @@
+{
+  "name": "among-math",
+  "version": "0.1.0",
+  "description": "Among Us-style math game to help 5th graders master CA standards and ace NWEA MAP for SRVUSD Course 3 placement.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2"
+  }
+}

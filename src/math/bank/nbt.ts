@@ -1,0 +1,77 @@
+import type { Problem, Lesson } from '../types';
+
+// ===========================================================================
+// 5.NBT — Number & Operations in Base Ten (place value, decimals)
+// ===========================================================================
+
+export const lessons: Lesson[] = [
+  {
+    domain: '5.NBT', standard: '5.NBT.1',
+    title: 'Place Value & Powers of 10',
+    steps: [
+      'Each place is 10× the place to its right (and 1/10 of the place to its left).',
+      '× 10 moves the digits one place LEFT; ÷ 10 moves them one place RIGHT.',
+      '10^n means 1 followed by n zeros (10^3 = 1000).',
+    ],
+    example: 'In 4.56 the 5 means 5 tenths (0.5) and the 6 means 6 hundredths (0.06).',
+    tip: 'Multiplying by 10^2 shifts the decimal point 2 places right.',
+  },
+  {
+    domain: '5.NBT', standard: '5.NBT.4',
+    title: 'Round Decimals',
+    steps: [
+      'Find the place you are rounding to.',
+      'Look at the digit just to the RIGHT.',
+      '5 or more → round up; 4 or less → keep the digit the same.',
+    ],
+    example: 'Round 3.47 to the nearest tenth: the hundredths digit is 7 (≥5) → 3.5.',
+    tip: 'Rounding to estimate first helps you catch silly answers on MAP.',
+  },
+  {
+    domain: '5.NBT', standard: '5.NBT.7',
+    title: 'Add/Subtract/Multiply/Divide Decimals',
+    steps: [
+      'Add & subtract: line up the decimal points, then compute.',
+      'Multiply: ignore decimals, multiply, then place the decimal so the product has as many decimal places as both factors combined.',
+      'Divide: make the divisor whole by shifting both numbers the same number of places.',
+    ],
+    example: '0.3 × 0.4: 3 × 4 = 12, two decimal places → 0.12.',
+    tip: 'Estimate first: 0.3 × 0.4 is about "a bit of a bit," so a tiny answer like 0.12 makes sense.',
+  },
+];
+
+export const problems: Problem[] = [
+  { id: 'nbt-1', domain: '5.NBT', standard: '5.NBT.1', tier: 1, type: 'multiple-choice',
+    prompt: 'In 7.25, what is the value of the digit 2?', choices: ['2', '2 tenths', '2 hundredths', '20'], answer: '2 tenths',
+    hints: ['The first place after the point is tenths.', '2 is right after the decimal point.'],
+    explanation: 'The 2 is in the tenths place, so its value is 2 tenths = 0.2.' },
+  { id: 'nbt-2', domain: '5.NBT', standard: '5.NBT.2', tier: 1, type: 'numeric',
+    prompt: 'What is 4.6 × 10?', answer: '46', acceptable: ['46', '46.0'],
+    hints: ['× 10 shifts the decimal one place right.'],
+    explanation: '× 10 moves the decimal one place right: 4.6 → 46.' },
+  { id: 'nbt-3', domain: '5.NBT', standard: '5.NBT.4', tier: 2, type: 'numeric',
+    prompt: 'Round 12.84 to the nearest tenth.', answer: '12.8', acceptable: ['12.8'],
+    hints: ['Look at the hundredths digit (4).', '4 is less than 5, so keep the tenth.'],
+    explanation: 'Hundredths digit is 4 (<5), so 12.84 rounds down to 12.8.' },
+  { id: 'nbt-4', domain: '5.NBT', standard: '5.NBT.7', tier: 2, type: 'numeric',
+    prompt: 'Compute 3.5 + 2.75', answer: '6.25', acceptable: ['6.25'],
+    hints: ['Line up the decimal points.', '3.50 + 2.75.'],
+    explanation: 'Line up: 3.50 + 2.75 = 6.25.' },
+  { id: 'nbt-5', domain: '5.NBT', standard: '5.NBT.7', tier: 3, type: 'numeric',
+    prompt: 'Compute 0.6 × 0.5', answer: '0.3', acceptable: ['0.30', '.3'],
+    hints: ['6 × 5 = 30.', 'Two decimal places total → place the point.'],
+    explanation: '6 × 5 = 30; the factors have 2 decimal places total → 0.30 = 0.3.' },
+  { id: 'nbt-6', domain: '5.NBT', standard: '5.NBT.5', tier: 3, type: 'numeric',
+    prompt: 'Multiply 312 × 24.', answer: '7488', acceptable: ['7488'],
+    hints: ['312 × 20 = 6240.', '312 × 4 = 1248. Add them.'],
+    explanation: '312 × 24 = 312×20 + 312×4 = 6240 + 1248 = 7488.' },
+  { id: 'nbt-7', domain: '5.NBT', standard: '5.NBT.7', tier: 4, type: 'numeric',
+    prompt: 'A ribbon 4.5 m long is cut into 0.9 m pieces. How many pieces?', answer: '5', acceptable: ['5', '5 pieces'],
+    hints: ['This is 4.5 ÷ 0.9.', 'Shift both ×10: 45 ÷ 9.'],
+    explanation: '4.5 ÷ 0.9 = 45 ÷ 9 = 5 pieces.' },
+  { id: 'nbt-8', domain: '5.NBT', standard: '5.NBT.1', tier: 4, type: 'constructed',
+    prompt: 'Explain why the 8 in 0.08 is worth one-tenth of the 8 in 0.8.',
+    answer: 'hundredths', acceptable: ['1/10', 'place value', 'ten times smaller'],
+    hints: ['Name each place.', 'Each place to the right is 1/10 of the one before.'],
+    explanation: 'In 0.8 the 8 is in the tenths place; in 0.08 the 8 is in the hundredths place. Hundredths is 1/10 of tenths, so 0.08 is one-tenth of 0.8.' },
+];
