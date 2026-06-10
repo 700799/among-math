@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { Theme, GAME_WIDTH, GAME_HEIGHT } from '../theme';
 import { load, update, overallRit } from '../data/progress';
-import { REWARDS } from '../game/Rewards';
+import { REWARDS, grant } from '../game/Rewards';
 import { ritBadge, RIT_GOAL } from '../math/adaptive';
+import { sfx } from '../ui/sfx';
 
 // Win screen: confetti, a free reward unlock, and a fresh run option.
 export class VictoryScene extends Phaser.Scene {
@@ -17,6 +18,7 @@ export class VictoryScene extends Phaser.Scene {
 
     this.add.rectangle(cx, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Theme.bg);
     this.confetti();
+    sfx.fanfare();
 
     this.add.text(cx, 120, '🏆 ALL TASKS COMPLETE!', {
       fontFamily: 'Trebuchet MS', fontSize: '40px', color: Theme.css.good, fontStyle: 'bold',
@@ -32,12 +34,12 @@ export class VictoryScene extends Phaser.Scene {
       fontFamily: 'Trebuchet MS', fontSize: '15px', color: Theme.css.textDim,
     }).setOrigin(0.5);
 
-    // free reward unlock for finishing
+    // free reward unlock for finishing — auto-equipped so the kid SEES it
     const locked = REWARDS.filter((r) => !load().unlocks.includes(r.id));
     if (locked.length) {
       const reward = locked[0];
-      update((d) => d.unlocks.push(reward.id));
-      this.add.text(cx, 308, `🎁 New reward unlocked: ${reward.emoji} ${reward.name}!`, {
+      grant(reward);
+      this.add.text(cx, 308, `🎁 New reward unlocked: ${reward.emoji} ${reward.name}! (already equipped)`, {
         fontFamily: 'Trebuchet MS', fontSize: '18px', color: Theme.css.accent,
       }).setOrigin(0.5);
     }

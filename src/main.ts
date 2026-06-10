@@ -8,6 +8,7 @@ import { SabotageScene } from './scenes/SabotageScene';
 import { ReportScene } from './scenes/ReportScene';
 import { VictoryScene } from './scenes/VictoryScene';
 import { ShopScene } from './scenes/ShopScene';
+import { TestScene } from './scenes/TestScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -32,6 +33,7 @@ const config: Phaser.Types.Core.GameConfig = {
     SabotageScene,
     ReportScene,
     ShopScene,
+    TestScene,
     VictoryScene,
   ],
 };

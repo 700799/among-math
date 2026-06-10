@@ -1,5 +1,5 @@
 import type { Problem, Lesson, Domain, Tier } from './types';
-import { generateFluency, generateFractionFluency } from './generators';
+import { generateFluency, generateFractionFluency, generateDecimalFluency, generatePowerOfTen } from './generators';
 import { nextTier } from './adaptive';
 
 import * as oa from './bank/oa';
@@ -24,6 +24,14 @@ export function getProblems(domain: Domain): Problem[] {
   return BANKS[domain].problems;
 }
 
+export function getProblemById(id: string): Problem | undefined {
+  for (const d of ALL_DOMAINS) {
+    const p = BANKS[d].problems.find((x) => x.id === id);
+    if (p) return p;
+  }
+  return undefined;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -33,8 +41,15 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// Pick a problem from a domain near a target tier, avoiding recent repeats.
-function pickNearTier(domain: Domain, tier: Tier, used: Set<string>): Problem {
+// Pick ONE problem from a domain near the student's current level — called
+// after every answer so difficulty truly adapts mid-set, just like NWEA MAP.
+export function pickProblem(
+  domain: Domain,
+  currentRit: number,
+  used: Set<string>,
+  lastCorrect: boolean | null
+): Problem {
+  const tier = nextTier(currentRit, lastCorrect);
   const pool = getProblems(domain);
   const sorted = shuffle(pool).sort(
     (a, b) => Math.abs(a.tier - tier) - Math.abs(b.tier - tier)
@@ -43,32 +58,30 @@ function pickNearTier(domain: Domain, tier: Tier, used: Set<string>): Problem {
   return fresh ?? sorted[0];
 }
 
-// Build an adaptive task set for a station: `count` problems whose difficulty
-// follows the student's running RIT. Returns problems in order.
-export function getTaskSet(domain: Domain, currentRit: number, count = 4): Problem[] {
-  const used = new Set<string>();
-  const out: Problem[] = [];
-  let lastCorrect: boolean | null = null;
-  let rit = currentRit;
-  for (let i = 0; i < count; i++) {
-    const tier = nextTier(rit, lastCorrect);
-    const p = pickNearTier(domain, tier, used);
-    used.add(p.id);
-    out.push(p);
-    // We don't know correctness yet at build time; vary tier by position so the
-    // set ramps up. The live adaptive RIT update happens as the kid answers.
-    lastCorrect = i % 2 === 0 ? true : null;
-    rit += 3;
-  }
-  return out;
+// Domain sequence for a MAP practice test — weighted like the real thing
+// (fractions & decimals heaviest), then shuffled so topics interleave.
+export function buildTestPlan(): Domain[] {
+  const plan: Domain[] = [
+    '5.NF', '5.NF', '5.NF', '5.NF',
+    '5.NBT', '5.NBT', '5.NBT',
+    '5.OA', '5.OA',
+    '5.MD', '5.MD', '5.MD',
+    '5.G', '5.G',
+    'bridge',
+  ];
+  return shuffle(plan);
 }
 
-// A timed fluency drill (sabotage). Mix of arithmetic + fraction quick facts.
+// A timed fluency drill (sabotage). Mix of arithmetic, fraction, decimal,
+// and powers-of-ten quick facts.
 export function getFluencyDrill(currentRit: number, count = 5): Problem[] {
   const tier = nextTier(currentRit, null);
   const out: Problem[] = [];
+  const makers: Array<(t: Tier) => Problem> = [
+    generateFluency, generateFluency, generateFractionFluency, generateDecimalFluency, generatePowerOfTen,
+  ];
   for (let i = 0; i < count; i++) {
-    out.push(Math.random() < 0.35 ? generateFractionFluency(tier) : generateFluency(tier));
+    out.push(makers[Math.floor(Math.random() * makers.length)](tier));
   }
   return out;
 }

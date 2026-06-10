@@ -17,10 +17,20 @@ test to qualify for **SRVUSD Course 3** (the accelerated path toward Algebra 1).
   - `5.OA` Expressions & patterns · `5.NBT` Place value & decimals · `5.NF` Fractions
   - `5.MD` Measurement & volume · `5.G` Geometry & coordinates
   - `bridge` Ratios/rates/%, integers, and simple equations (shows acceleration readiness)
-- **Adaptive difficulty (RIT-like).** Correct answers push harder questions; misses ease off —
-  mirroring NWEA MAP. A running RIT estimate per domain feeds the **Mission Report**.
+- **Live-adaptive difficulty (RIT-like).** Each NEXT question is chosen from the kid's
+  updated RIT after every answer — exactly how NWEA MAP works.
+- **🧪 MAP Practice Simulation.** A 15-question mixed adaptive test (weighted toward
+  fractions/decimals like the real thing): no hints, no mid-test answer reveals, then a full
+  results screen — estimated RIT, percentile, per-topic breakdown, and test history.
+- **Missed-problem review.** Every wrong answer is saved; review them from the Mission
+  Report (or right after a test) — solving one correctly clears it. Targeted re-practice
+  is the fastest way to grow a RIT score.
 - **Timed fluency drills** (sabotages) simulate MAP pacing — forgiving, never a hard game-over.
-- **Rewards & streaks** keep it fun: earn coins, unlock cosmetics, celebrate at the win screen.
+  Drills mix whole-number, fraction, decimal, and powers-of-10 quick facts.
+- **Rewards you can SEE.** Earned hats float on the crewmate's head, pets follow it around
+  the ship, and the gold badge stars the name. Coins + streak bonuses + a cosmetics shop.
+- **Sound & juice.** Synth sound effects (correct/wrong/coin/fanfare/alarm — zero audio
+  assets) with a mute toggle, camera shake on sabotage, streak flames in the HUD.
 
 ## Tech
 

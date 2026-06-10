@@ -57,16 +57,48 @@ export function generateFractionFluency(tier: Tier): Problem {
   const x = rand(1, d - 1);
   const y = rand(1, d - 1);
   const add = Math.random() < 0.5;
-  let top = add ? x + y : Math.abs(x - y);
+  const top = add ? x + y : Math.abs(x - y);
   const prompt = add ? `${x}/${d} + ${y}/${d}` : `${Math.max(x, y)}/${d} − ${Math.min(x, y)}/${d}`;
-  if (!add) top = Math.abs(x - y);
   const g = gcd(top, d) || 1;
   const simp = top === 0 ? '0' : `${top / g}/${d / g}`;
   return {
     id: nextId(), domain: '5.NF', standard: 'fluency', tier, type: 'numeric',
     prompt: `Quick! ${prompt} = ?  (answer like ${top}/${d})`,
-    answer: `${top}/${d}`, acceptable: [simp, String(top / g === d / g ? 1 : '')].filter(Boolean),
+    answer: `${top}/${d}`, acceptable: [simp],
     hints: ['Same denominator — just add or subtract the tops.'],
     explanation: `${prompt} = ${top}/${d}${simp !== `${top}/${d}` ? ` = ${simp}` : ''}.`,
+  };
+}
+
+// Decimal add/subtract to hundredths — core 5.NBT.7 fluency.
+export function generateDecimalFluency(tier: Tier): Problem {
+  const scale = tier >= 3 ? 100 : 10; // tenths or hundredths
+  let a = rand(1, 9 * scale) / scale;
+  let b = rand(1, 9 * scale) / scale;
+  const add = Math.random() < 0.5;
+  if (!add && b > a) [a, b] = [b, a];
+  const answer = +(add ? a + b : a - b).toFixed(2);
+  const prompt = `${a} ${add ? '+' : '−'} ${b}`;
+  return {
+    id: nextId(), domain: '5.NBT', standard: 'fluency', tier, type: 'numeric',
+    prompt: `Quick! ${prompt} = ?`, answer,
+    hints: ['Line up the decimal points.'],
+    explanation: `${prompt} = ${answer}.`,
+  };
+}
+
+// Powers of 10 — shift the decimal point (5.NBT.2).
+export function generatePowerOfTen(tier: Tier): Problem {
+  const base = rand(1, 99) / (Math.random() < 0.5 ? 10 : 1);
+  const exp = tier >= 4 ? rand(1, 3) : rand(1, 2);
+  const mult = Math.random() < 0.6;
+  const factor = Math.pow(10, exp);
+  const answer = +((mult ? base * factor : base / factor).toFixed(4));
+  const prompt = `${base} ${mult ? '×' : '÷'} ${factor}`;
+  return {
+    id: nextId(), domain: '5.NBT', standard: 'fluency', tier, type: 'numeric',
+    prompt: `Quick! ${prompt} = ?`, answer,
+    hints: [`${mult ? '×' : '÷'} ${factor} shifts the decimal ${exp} place${exp > 1 ? 's' : ''} ${mult ? 'right' : 'left'}.`],
+    explanation: `${prompt} = ${answer}. Shifting the decimal ${exp} place${exp > 1 ? 's' : ''} ${mult ? 'right' : 'left'}.`,
   };
 }

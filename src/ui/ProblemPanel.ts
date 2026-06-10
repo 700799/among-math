@@ -3,12 +3,18 @@ import { Theme } from '../theme';
 import type { Problem } from '../math/types';
 import { checkAnswer } from '../math/index';
 import { drawDiagram } from './Diagram';
+import { sfx } from './sfx';
+
+export type PanelMode = 'practice' | 'drill' | 'test';
 
 export interface ProblemPanelOpts {
   problem: Problem;
   width: number;
   onAnswered: (correct: boolean) => void;
-  compact?: boolean; // timed sabotage mode: auto-advance, minimal chrome
+  // practice: hints + full explanations (default)
+  // drill:    timed sabotage — brief flash w/ answer, auto-advance
+  // test:     MAP simulation — no hints, brief ✅/❌ flash, NO answer reveal
+  mode?: PanelMode;
 }
 
 // Renders one problem with the right input UI and reports correctness.
@@ -17,6 +23,7 @@ export class ProblemPanel {
   private scene: Phaser.Scene;
   private problem: Problem;
   private opts: ProblemPanelOpts;
+  private mode: PanelMode;
   private entry = '';
   private entryText?: Phaser.GameObjects.Text;
   private feedback!: Phaser.GameObjects.Text;
@@ -29,6 +36,7 @@ export class ProblemPanel {
   constructor(scene: Phaser.Scene, x: number, y: number, opts: ProblemPanelOpts) {
     this.scene = scene;
     this.opts = opts;
+    this.mode = opts.mode ?? 'practice';
     this.problem = opts.problem;
     this.container = scene.add.container(x, y);
     this.build();
@@ -77,10 +85,11 @@ export class ProblemPanel {
       .setOrigin(0.5, 0);
     this.container.add(this.feedback);
 
-    // Hint button (only before answering, and only if hints exist)
-    if (!this.opts.compact && p.hints.length) {
+    // Hint button — practice mode only (real MAP gives no hints)
+    if (this.mode === 'practice' && p.hints.length) {
       const hint = this.smallButton(-width / 2 + 70, -18, '💡 Hint', Theme.warn, () => {
         if (this.answered) return;
+        sfx.click();
         const h = p.hints[Math.min(this.hintsShown, p.hints.length - 1)];
         this.hintsShown++;
         this.hintText.setText(h);
@@ -109,18 +118,19 @@ export class ProblemPanel {
     this.container.add(display);
     this.container.add(this.entryText);
 
-    const keys = ['7', '8', '9', '/', '4', '5', '6', '-', '1', '2', '3', '.', '0', '⌫', '↵'];
+    const keys = ['7', '8', '9', '/', '4', '5', '6', '-', '1', '2', '3', '.', '0', ' ', '⌫', '↵'];
     const cols = 4;
     const kw = 50, kh = 36, gap = 6;
     const startX = -((cols * (kw + gap)) - gap) / 2 + kw / 2;
-    let ky = y + 32;
+    const ky = y + 32;
     keys.forEach((k, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
       const kx = startX + col * (kw + gap);
       const yy = ky + row * (kh + gap);
       const color = k === '↵' ? Theme.good : k === '⌫' ? Theme.bad : Theme.bgPanelLight;
-      const btn = this.keyButton(kx, yy, kw, kh, k, color, () => this.onKey(k));
+      const label = k === ' ' ? '␣' : k;
+      const btn = this.keyButton(kx, yy, kw, kh, label, color, () => this.onKey(k));
       this.container.add(btn);
     });
 
@@ -128,7 +138,7 @@ export class ProblemPanel {
     this.keyHandler = (e: KeyboardEvent) => {
       if (this.answered) return;
       if (/^[0-9]$/.test(e.key)) this.onKey(e.key);
-      else if (e.key === '/' || e.key === '.' || e.key === '-') this.onKey(e.key);
+      else if (e.key === '/' || e.key === '.' || e.key === '-' || e.key === ' ') this.onKey(e.key);
       else if (e.key === 'Backspace') this.onKey('⌫');
       else if (e.key === 'Enter') this.onKey('↵');
     };
@@ -141,41 +151,44 @@ export class ProblemPanel {
     if (this.answered) return;
     if (k === '⌫') this.entry = this.entry.slice(0, -1);
     else if (k === '↵') { this.submit(this.entry); return; }
-    else if (this.entry.length < 8) this.entry += k;
-    this.entryText?.setText(this.entry || '_');
+    else if (this.entry.length < 10) this.entry += k;
+    this.entryText?.setText(this.entry.length ? this.entry : '_');
   }
 
   // ---- constructed response: think, reveal, self-check ----
   private buildConstructed(y: number): number {
     const note = this.scene.add
-      .text(0, y, 'Think it through, then check your reasoning.', { fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.textDim })
+      .text(0, y, 'Say your answer OUT LOUD or write it down — then check yourself.', {
+        fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.textDim, align: 'center', wordWrap: { width: this.opts.width - 60 },
+      })
       .setOrigin(0.5, 0);
     this.container.add(note);
 
     let revealed = false;
     const model = this.scene.add
-      .text(0, y + 26, '', { fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.text, align: 'center', wordWrap: { width: this.opts.width - 40 } })
+      .text(0, y + 56, '', { fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.text, align: 'center', wordWrap: { width: this.opts.width - 40 } })
       .setOrigin(0.5, 0);
     this.container.add(model);
 
-    const reveal = this.smallButton(0, y + 24, '🔎 Reveal model answer', Theme.accent, () => {
+    const gotIt = this.smallButton(-100, y + 160, '✅ I explained it!', Theme.good, () => this.submit('__self_correct__', true)).setVisible(false);
+    const review = this.smallButton(100, y + 160, '🔁 I will review', Theme.warn, () => this.submit('__self_review__', false)).setVisible(false);
+    this.container.add(gotIt);
+    this.container.add(review);
+
+    const reveal = this.smallButton(0, y + 38, '🔎 Reveal model answer', Theme.accent, () => {
       if (revealed) return;
       revealed = true;
+      sfx.click();
       model.setText(this.problem.explanation);
+      gotIt.setY(y + 66 + model.height + 24);
+      review.setY(y + 66 + model.height + 24);
       gotIt.setVisible(true);
       review.setVisible(true);
       reveal.setVisible(false);
     });
     this.container.add(reveal);
 
-    const gotIt = this.smallButton(-90, y + 150, '✅ I explained it!', Theme.good, () => this.submit('__self_correct__', true))
-      .setVisible(false);
-    const review = this.smallButton(90, y + 150, '🔁 I will review', Theme.warn, () => this.submit('__self_review__', false))
-      .setVisible(false);
-    this.container.add(gotIt);
-    this.container.add(review);
-
-    return y + 190;
+    return y + 200;
   }
 
   // ---- submission + feedback ----
@@ -184,15 +197,24 @@ export class ProblemPanel {
     this.answered = true;
     const correct = forced !== undefined ? forced : checkAnswer(this.problem, raw);
 
-    if (this.opts.compact) {
-      // timed mode: brief flash, then advance
+    if (correct) sfx.correct(); else sfx.wrong();
+
+    if (this.mode === 'drill') {
+      // timed mode: brief flash WITH the answer, then advance
       this.feedback.setText(correct ? '✅ Fixed!' : `❌ Ans: ${this.problem.answer}`).setColor(correct ? Theme.css.good : Theme.css.bad);
-      this.scene.time.delayedCall(550, () => this.finish(correct));
+      this.scene.time.delayedCall(650, () => this.finish(correct));
+      return;
+    }
+
+    if (this.mode === 'test') {
+      // MAP simulation: lock in, no answer reveal (kid reviews missed at the end)
+      this.feedback.setText(correct ? '✅' : '❌  (saved for review)').setColor(correct ? Theme.css.good : Theme.css.bad);
+      this.scene.time.delayedCall(600, () => this.finish(correct));
       return;
     }
 
     this.feedback
-      .setText(correct ? '✅ Correct! Nice work!' : `❌ Not quite. Here is how:`)
+      .setText(correct ? '✅ Correct! Nice work!' : '❌ Not quite. Here is how:')
       .setColor(correct ? Theme.css.good : Theme.css.bad);
 
     // Show explanation, then a Next button.
@@ -207,7 +229,7 @@ export class ProblemPanel {
     this.container.add(next);
 
     // disable further input
-    this.interactive.forEach((o) => (o as any).disableInteractive?.());
+    this.interactive.forEach((o) => (o as Phaser.GameObjects.Shape).disableInteractive?.());
   }
 
   private finish(correct: boolean) {

@@ -1,11 +1,16 @@
 import Phaser from 'phaser';
+import { equippedHatEmoji, equippedPetEmoji, hasBadge } from './Rewards';
 
 // The kid's crewmate. Moves with arrows/WASD and supports tap/click-to-move
-// so it plays nicely on tablets too.
+// so it plays nicely on tablets too. Earned cosmetics show up here: the
+// equipped hat floats on the head, the pet follows behind, and the gold
+// badge stars the name.
 export class Player {
   sprite: Phaser.Physics.Arcade.Sprite;
   private shadow: Phaser.GameObjects.Image;
   private label: Phaser.GameObjects.Text;
+  private hat?: Phaser.GameObjects.Text;
+  private pet?: Phaser.GameObjects.Text;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd: Record<string, Phaser.Input.Keyboard.Key>;
   private target: Phaser.Math.Vector2 | null = null;
@@ -17,10 +22,20 @@ export class Player {
     this.sprite.setCollideWorldBounds(true);
     (this.sprite.body as Phaser.Physics.Arcade.Body).setSize(26, 30).setOffset(7, 12);
 
+    const displayName = hasBadge() ? `⭐ ${name}` : name;
     this.label = scene.add
-      .text(x, y - 30, name, { fontFamily: 'Trebuchet MS', fontSize: '13px', color: '#eaf2ff' })
+      .text(x, y - 32, displayName, { fontFamily: 'Trebuchet MS', fontSize: '13px', color: '#eaf2ff' })
       .setOrigin(0.5)
       .setDepth(6);
+
+    const hatEmoji = equippedHatEmoji();
+    if (hatEmoji) {
+      this.hat = scene.add.text(x, y - 22, hatEmoji, { fontSize: '20px' }).setOrigin(0.5, 1).setDepth(6);
+    }
+    const petEmoji = equippedPetEmoji();
+    if (petEmoji) {
+      this.pet = scene.add.text(x - 34, y + 8, petEmoji, { fontSize: '22px' }).setOrigin(0.5).setDepth(5);
+    }
 
     this.cursors = scene.input.keyboard!.createCursorKeys();
     this.wasd = scene.input.keyboard!.addKeys('W,A,S,D') as Record<string, Phaser.Input.Keyboard.Key>;
@@ -62,9 +77,16 @@ export class Player {
       body.setVelocity(0, 0);
     }
 
-    // Keep shadow + name label glued to the sprite.
+    // Keep shadow, name, hat, and pet glued to the sprite.
     this.shadow.setPosition(this.sprite.x, this.sprite.y + 18);
-    this.label.setPosition(this.sprite.x, this.sprite.y - 30);
+    this.label.setPosition(this.sprite.x, this.sprite.y - 32);
+    this.hat?.setPosition(this.sprite.x, this.sprite.y - 18);
+    if (this.pet) {
+      // Pet trails behind with a gentle chase.
+      const behindX = this.sprite.x + (this.sprite.flipX ? 34 : -34);
+      this.pet.x = Phaser.Math.Linear(this.pet.x, behindX, 0.08);
+      this.pet.y = Phaser.Math.Linear(this.pet.y, this.sprite.y + 8, 0.08);
+    }
   }
 
   get x() { return this.sprite.x; }
