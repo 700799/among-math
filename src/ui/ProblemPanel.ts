@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Theme } from '../theme';
-import type { Problem } from '../math/types';
+import type { Problem, Solution } from '../math/types';
 import { checkAnswer } from '../math/index';
 import { drawDiagram } from './Diagram';
 import { sfx } from './sfx';
@@ -11,13 +11,19 @@ export interface ProblemPanelOpts {
   problem: Problem;
   width: number;
   onAnswered: (correct: boolean) => void;
-  // practice: hints + full explanations (default)
+  // practice: hints + full multi-method solutions (default)
   // drill:    timed sabotage — brief flash w/ answer, auto-advance
   // test:     MAP simulation — no hints, brief ✅/❌ flash, NO answer reveal
   mode?: PanelMode;
 }
 
+// Local Y where the practice-mode "Next" / constructed-response buttons sit —
+// safely inside the 540px task modal (panel sits 70px below the modal top).
+const FOOTER_Y = 430;
+
 // Renders one problem with the right input UI and reports correctness.
+// In practice mode, answering clears the inputs and shows the full worked
+// solutions with a "Way 1 | Way 2 | Way 3" method switcher.
 export class ProblemPanel {
   container: Phaser.GameObjects.Container;
   private scene: Phaser.Scene;
@@ -32,6 +38,11 @@ export class ProblemPanel {
   private answered = false;
   private keyHandler?: (e: KeyboardEvent) => void;
   private interactive: Phaser.GameObjects.GameObject[] = [];
+  private inputArea!: Phaser.GameObjects.Container;   // cleared when results show
+  private headerArea!: Phaser.GameObjects.Container;  // prompt + diagram (also cleared)
+  private resultsArea?: Phaser.GameObjects.Container;
+  private methodBody?: Phaser.GameObjects.Container;
+  private tabButtons: Phaser.GameObjects.Rectangle[] = [];
 
   constructor(scene: Phaser.Scene, x: number, y: number, opts: ProblemPanelOpts) {
     this.scene = scene;
@@ -45,6 +56,10 @@ export class ProblemPanel {
   private build() {
     const { width } = this.opts;
     const p = this.problem;
+    this.headerArea = this.scene.add.container(0, 0);
+    this.inputArea = this.scene.add.container(0, 0);
+    this.container.add(this.headerArea);
+    this.container.add(this.inputArea);
 
     // Prompt
     const prompt = this.scene.add
@@ -53,13 +68,13 @@ export class ProblemPanel {
         align: 'center', wordWrap: { width: width - 40 },
       })
       .setOrigin(0.5, 0);
-    this.container.add(prompt);
+    this.headerArea.add(prompt);
     let cursorY = prompt.height + 14;
 
     // Diagram
     if (p.diagram) {
       const dia = drawDiagram(this.scene, p.diagram, 0, cursorY + 70);
-      this.container.add(dia);
+      this.headerArea.add(dia);
       cursorY += 160;
     }
 
@@ -67,7 +82,7 @@ export class ProblemPanel {
     this.hintText = this.scene.add
       .text(0, cursorY, '', { fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.warn, align: 'center', wordWrap: { width: width - 40 } })
       .setOrigin(0.5, 0);
-    this.container.add(this.hintText);
+    this.inputArea.add(this.hintText);
     cursorY += 26;
 
     // Input area
@@ -79,7 +94,7 @@ export class ProblemPanel {
       cursorY = this.buildConstructed(cursorY);
     }
 
-    // Feedback line
+    // Feedback line (used by drill/test flashes)
     this.feedback = this.scene.add
       .text(0, cursorY + 8, '', { fontFamily: 'Trebuchet MS', fontSize: '16px', color: Theme.css.good, align: 'center', wordWrap: { width: width - 30 } })
       .setOrigin(0.5, 0);
@@ -94,7 +109,7 @@ export class ProblemPanel {
         this.hintsShown++;
         this.hintText.setText(h);
       });
-      this.container.add(hint);
+      this.inputArea.add(hint);
     }
   }
 
@@ -104,7 +119,7 @@ export class ProblemPanel {
     choices.forEach((choice, i) => {
       const by = y + i * 44;
       const btn = this.choiceButton(0, by, choice, () => this.submit(choice));
-      this.container.add(btn);
+      this.inputArea.add(btn);
     });
     return y + choices.length * 44;
   }
@@ -115,8 +130,8 @@ export class ProblemPanel {
     this.entryText = this.scene.add
       .text(0, y + 4, '_', { fontFamily: 'Trebuchet MS', fontSize: '22px', color: Theme.css.accent })
       .setOrigin(0.5);
-    this.container.add(display);
-    this.container.add(this.entryText);
+    this.inputArea.add(display);
+    this.inputArea.add(this.entryText);
 
     const keys = ['7', '8', '9', '/', '4', '5', '6', '-', '1', '2', '3', '.', '0', ' ', '⌫', '↵'];
     const cols = 4;
@@ -131,7 +146,7 @@ export class ProblemPanel {
       const color = k === '↵' ? Theme.good : k === '⌫' ? Theme.bad : Theme.bgPanelLight;
       const label = k === ' ' ? '␣' : k;
       const btn = this.keyButton(kx, yy, kw, kh, label, color, () => this.onKey(k));
-      this.container.add(btn);
+      this.inputArea.add(btn);
     });
 
     // physical keyboard support
@@ -155,40 +170,27 @@ export class ProblemPanel {
     this.entryText?.setText(this.entry.length ? this.entry : '_');
   }
 
-  // ---- constructed response: think, reveal, self-check ----
+  // ---- constructed response: think, reveal full solutions, self-check ----
   private buildConstructed(y: number): number {
     const note = this.scene.add
       .text(0, y, 'Say your answer OUT LOUD or write it down — then check yourself.', {
         fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.textDim, align: 'center', wordWrap: { width: this.opts.width - 60 },
       })
       .setOrigin(0.5, 0);
-    this.container.add(note);
+    this.inputArea.add(note);
 
-    let revealed = false;
-    const model = this.scene.add
-      .text(0, y + 56, '', { fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.text, align: 'center', wordWrap: { width: this.opts.width - 40 } })
-      .setOrigin(0.5, 0);
-    this.container.add(model);
-
-    const gotIt = this.smallButton(-100, y + 160, '✅ I explained it!', Theme.good, () => this.submit('__self_correct__', true)).setVisible(false);
-    const review = this.smallButton(100, y + 160, '🔁 I will review', Theme.warn, () => this.submit('__self_review__', false)).setVisible(false);
-    this.container.add(gotIt);
-    this.container.add(review);
-
-    const reveal = this.smallButton(0, y + 38, '🔎 Reveal model answer', Theme.accent, () => {
-      if (revealed) return;
-      revealed = true;
+    const reveal = this.smallButton(0, y + 44, '🔎 Reveal the ways to solve it', Theme.accent, () => {
       sfx.click();
-      model.setText(this.problem.explanation);
-      gotIt.setY(y + 66 + model.height + 24);
-      review.setY(y + 66 + model.height + 24);
-      gotIt.setVisible(true);
-      review.setVisible(true);
-      reveal.setVisible(false);
+      // Swap the prompt+inputs for the full solution view, then self-check.
+      this.inputArea.setVisible(false);
+      this.showSolutions('🔎 Model answer — did your explanation match?', Theme.css.accent, [
+        { label: '✅ I explained it!', color: Theme.good, onClick: () => this.submit('__self_correct__', true) },
+        { label: '🔁 I will review', color: Theme.warn, onClick: () => this.submit('__self_review__', false) },
+      ]);
     });
-    this.container.add(reveal);
+    this.inputArea.add(reveal);
 
-    return y + 200;
+    return y + 80;
   }
 
   // ---- submission + feedback ----
@@ -213,23 +215,126 @@ export class ProblemPanel {
       return;
     }
 
-    this.feedback
-      .setText(correct ? '✅ Correct! Nice work!' : '❌ Not quite. Here is how:')
-      .setColor(correct ? Theme.css.good : Theme.css.bad);
+    // Practice/review: clear the inputs and teach with the full solutions.
+    if (forced !== undefined) {
+      // constructed-response self-check: solutions are already on screen
+      this.finish(correct);
+      return;
+    }
+    this.cleanupKeys();
+    this.inputArea.setVisible(false);
+    this.interactive.forEach((o) => (o as Phaser.GameObjects.Shape).disableInteractive?.());
 
-    // Show explanation, then a Next button.
-    const exp = this.scene.add
-      .text(0, this.feedback.y + 26, this.problem.explanation, {
-        fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.textDim, align: 'center', wordWrap: { width: this.opts.width - 30 },
+    const banner = correct
+      ? '✅ Correct! Nice work — check out the different ways below:'
+      : `❌ Not quite — the answer is ${this.problem.answer}. Learn ALL the ways:`;
+    this.showSolutions(banner, correct ? Theme.css.good : Theme.css.bad, [
+      { label: 'Next  ▶', color: Theme.good, onClick: () => this.finish(correct) },
+    ]);
+  }
+
+  // Replace the panel content with: banner, takeaway, method tabs, worked
+  // steps for the selected method, and footer buttons.
+  private showSolutions(
+    banner: string,
+    bannerColor: string,
+    buttons: { label: string; color: number; onClick: () => void }[]
+  ) {
+    const { width } = this.opts;
+    const p = this.problem;
+    // Hide the diagram too — solution steps are written self-contained, and
+    // this guarantees even 3-method solutions fit inside the modal.
+    this.headerArea.setVisible(false);
+
+    this.resultsArea?.destroy();
+    this.resultsArea = this.scene.add.container(0, 0);
+    this.container.add(this.resultsArea);
+
+    let y = 0;
+    const bannerText = this.scene.add
+      .text(0, y, banner, {
+        fontFamily: 'Trebuchet MS', fontSize: '17px', color: bannerColor, fontStyle: 'bold',
+        align: 'center', wordWrap: { width: width - 40 },
       })
       .setOrigin(0.5, 0);
-    this.container.add(exp);
+    this.resultsArea.add(bannerText);
+    y += bannerText.height + 8;
 
-    const next = this.smallButton(0, exp.y + exp.height + 22, 'Next  ▶', Theme.good, () => this.finish(correct));
-    this.container.add(next);
+    // Restate the question small, so the steps make sense without scrolling up.
+    const mini = this.scene.add
+      .text(0, y, p.prompt, {
+        fontFamily: 'Trebuchet MS', fontSize: '13px', color: Theme.css.textDim,
+        align: 'center', wordWrap: { width: width - 60 },
+      })
+      .setOrigin(0.5, 0);
+    this.resultsArea.add(mini);
+    y += mini.height + 10;
 
-    // disable further input
-    this.interactive.forEach((o) => (o as Phaser.GameObjects.Shape).disableInteractive?.());
+    // Method tabs (only when there's more than one way)
+    const sols = p.solutions;
+    let selected = 0;
+    this.tabButtons = [];
+    if (sols.length > 1) {
+      const tabW = 110, gap = 10;
+      const totalW = sols.length * tabW + (sols.length - 1) * gap;
+      sols.forEach((_, i) => {
+        const tx = -totalW / 2 + tabW / 2 + i * (tabW + gap);
+        const bg = this.scene.add.rectangle(tx, y + 16, tabW, 30, i === 0 ? Theme.accent : Theme.bgPanelLight)
+          .setStrokeStyle(1, Theme.wall)
+          .setInteractive({ useHandCursor: true });
+        const label = this.scene.add.text(tx, y + 16, `Way ${i + 1}`, {
+          fontFamily: 'Trebuchet MS', fontSize: '14px', color: i === 0 ? '#06121f' : Theme.css.text, fontStyle: 'bold',
+        }).setOrigin(0.5);
+        bg.on('pointerdown', () => {
+          if (selected === i) return;
+          sfx.click();
+          selected = i;
+          this.tabButtons.forEach((b, j) => {
+            b.setFillStyle(j === i ? Theme.accent : Theme.bgPanelLight);
+            (b.getData('label') as Phaser.GameObjects.Text).setColor(j === i ? '#06121f' : Theme.css.text);
+          });
+          renderMethod(i);
+        });
+        bg.setData('label', label);
+        this.tabButtons.push(bg);
+        this.resultsArea!.add(bg);
+        this.resultsArea!.add(label);
+      });
+      y += 40;
+    }
+
+    const bodyTop = y + 6;
+    const renderMethod = (i: number) => {
+      this.methodBody?.destroy();
+      this.methodBody = this.scene.add.container(0, 0);
+      this.resultsArea!.add(this.methodBody);
+      const sol: Solution = sols[i];
+      let my = bodyTop;
+      const title = this.scene.add
+        .text(0, my, sol.title, {
+          fontFamily: 'Trebuchet MS', fontSize: '16px', color: Theme.css.warn, fontStyle: 'bold',
+          align: 'center', wordWrap: { width: width - 50 },
+        })
+        .setOrigin(0.5, 0);
+      this.methodBody.add(title);
+      my += title.height + 8;
+      sol.steps.forEach((step, idx) => {
+        const t = this.scene.add.text(-width / 2 + 36, my, `${idx + 1}.  ${step}`, {
+          fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.text,
+          wordWrap: { width: width - 80 },
+        });
+        this.methodBody!.add(t);
+        my += t.height + 6;
+      });
+    };
+    renderMethod(0);
+
+    // Footer buttons at a fixed safe height inside the modal.
+    const totalBw = buttons.length;
+    buttons.forEach((b, i) => {
+      const bx = totalBw === 1 ? 0 : (i === 0 ? -110 : 110);
+      this.resultsArea!.add(this.smallButton(bx, FOOTER_Y, b.label, b.color, b.onClick));
+    });
   }
 
   private finish(correct: boolean) {
@@ -237,9 +342,13 @@ export class ProblemPanel {
     this.opts.onAnswered(correct);
   }
 
-  cleanup() {
+  private cleanupKeys() {
     if (this.keyHandler) window.removeEventListener('keydown', this.keyHandler);
     this.keyHandler = undefined;
+  }
+
+  cleanup() {
+    this.cleanupKeys();
   }
 
   destroy() {

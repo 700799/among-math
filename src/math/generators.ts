@@ -48,6 +48,7 @@ export function generateFluency(tier: Tier): Problem {
     prompt: `Quick! ${prompt} = ?`, answer,
     hints: ['Take a breath and compute carefully.'],
     explanation: `${prompt} = ${answer}.`,
+    solutions: [{ title: 'Quick way', steps: [`Compute directly: ${prompt} = ${answer}.`] }],
   };
 }
 
@@ -67,6 +68,7 @@ export function generateFractionFluency(tier: Tier): Problem {
     answer: `${top}/${d}`, acceptable: [simp],
     hints: ['Same denominator — just add or subtract the tops.'],
     explanation: `${prompt} = ${top}/${d}${simp !== `${top}/${d}` ? ` = ${simp}` : ''}.`,
+    solutions: [{ title: 'Quick way', steps: ['Same denominator: work with the tops only.', `${prompt} = ${top}/${d}${simp !== `${top}/${d}` ? ` = ${simp}` : ''}.`] }],
   };
 }
 
@@ -84,6 +86,7 @@ export function generateDecimalFluency(tier: Tier): Problem {
     prompt: `Quick! ${prompt} = ?`, answer,
     hints: ['Line up the decimal points.'],
     explanation: `${prompt} = ${answer}.`,
+    solutions: [{ title: 'Quick way', steps: ['Line up the decimal points, then compute.', `${prompt} = ${answer}.`] }],
   };
 }
 
@@ -100,5 +103,6 @@ export function generatePowerOfTen(tier: Tier): Problem {
     prompt: `Quick! ${prompt} = ?`, answer,
     hints: [`${mult ? '×' : '÷'} ${factor} shifts the decimal ${exp} place${exp > 1 ? 's' : ''} ${mult ? 'right' : 'left'}.`],
     explanation: `${prompt} = ${answer}. Shifting the decimal ${exp} place${exp > 1 ? 's' : ''} ${mult ? 'right' : 'left'}.`,
+    solutions: [{ title: 'Quick way', steps: [`Shift the decimal ${exp} place${exp > 1 ? 's' : ''} ${mult ? 'right' : 'left'}.`, `${prompt} = ${answer}.`] }],
   };
 }

@@ -29,6 +29,13 @@ export type DiagramSpec =
   | { kind: 'shape'; shape: 'square' | 'rectangle' | 'rhombus' | 'trapezoid' | 'triangle' | 'parallelogram' }
   | { kind: 'barModel'; segments: number; labeled: number };
 
+// One fully worked solution strategy. Every problem teaches 2-3 of these so
+// kids see multiple ways to think (algorithm, visual model, estimation...).
+export interface Solution {
+  title: string;     // e.g. "Way 1: Common denominators"
+  steps: string[];   // complete worked steps, kid-friendly, ending in the answer
+}
+
 export interface Problem {
   id: string;
   domain: Domain;
@@ -41,7 +48,8 @@ export interface Problem {
   answer: string | number; // exact answer (numeric compares loosely)
   acceptable?: string[];   // extra accepted text answers (numeric/constructed)
   hints: string[];         // shown one at a time on a miss
-  explanation: string;     // full worked solution, shown after answering
+  explanation: string;     // one-sentence quick takeaway (drill-mode flash)
+  solutions: Solution[];   // 2-3 fully worked methods (practice/review modes)
 }
 
 // A short teaching card shown BEFORE practice so kids learn the skill first.
