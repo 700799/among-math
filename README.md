@@ -25,6 +25,10 @@ test to qualify for **SRVUSD Course 3** (the accelerated path toward Algebra 1).
 - **Missed-problem review.** Every wrong answer is saved; review them from the Mission
   Report (or right after a test) — solving one correctly clears it. Targeted re-practice
   is the fastest way to grow a RIT score.
+- **400 authored problems, each solved 2–3 ways.** After answering in practice, the
+  panel switches to a **Way 1 | Way 2 | Way 3** view with complete numbered steps for
+  every method (algorithm vs. visual model vs. estimation vs. work-backward) — kids
+  learn flexible thinking, not just one trick.
 - **Timed fluency drills** (sabotages) simulate MAP pacing — forgiving, never a hard game-over.
   Drills mix whole-number, fraction, decimal, and powers-of-10 quick facts.
 - **Rewards you can SEE.** Earned hats float on the crewmate's head, pets follow it around
@@ -61,6 +65,11 @@ Everything is data-driven — **no game code changes needed**:
 - Add problems to `src/math/bank/<domain>.ts` (`problems: Problem[]`).
 - Add teaching cards to the same file (`lessons: Lesson[]`).
 - Tag each problem with a `tier` (1–4) so the adaptive engine places it by difficulty.
+- Give every problem 2–3 `solutions` (different strategies, full worked steps) — the
+  type system requires it, and `npm run validate` checks the whole bank (unique ids,
+  answers match choices, solution structure, tier coverage).
+
+Current bank: **400 problems** — 5.NF 80 · 5.NBT 68 · 5.MD 66 · bridge 66 · 5.OA 60 · 5.G 60.
 
 Key files:
 
