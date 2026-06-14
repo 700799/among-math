@@ -17,10 +17,24 @@ test to qualify for **SRVUSD Course 3** (the accelerated path toward Algebra 1).
   - `5.OA` Expressions & patterns · `5.NBT` Place value & decimals · `5.NF` Fractions
   - `5.MD` Measurement & volume · `5.G` Geometry & coordinates
   - `bridge` Ratios/rates/%, integers, and simple equations (shows acceleration readiness)
-- **Adaptive difficulty (RIT-like).** Correct answers push harder questions; misses ease off —
-  mirroring NWEA MAP. A running RIT estimate per domain feeds the **Mission Report**.
+- **Live-adaptive difficulty (RIT-like).** Each NEXT question is chosen from the kid's
+  updated RIT after every answer — exactly how NWEA MAP works.
+- **🧪 MAP Practice Simulation.** A 15-question mixed adaptive test (weighted toward
+  fractions/decimals like the real thing): no hints, no mid-test answer reveals, then a full
+  results screen — estimated RIT, percentile, per-topic breakdown, and test history.
+- **Missed-problem review.** Every wrong answer is saved; review them from the Mission
+  Report (or right after a test) — solving one correctly clears it. Targeted re-practice
+  is the fastest way to grow a RIT score.
+- **400 authored problems, each solved 2–3 ways.** After answering in practice, the
+  panel switches to a **Way 1 | Way 2 | Way 3** view with complete numbered steps for
+  every method (algorithm vs. visual model vs. estimation vs. work-backward) — kids
+  learn flexible thinking, not just one trick.
 - **Timed fluency drills** (sabotages) simulate MAP pacing — forgiving, never a hard game-over.
-- **Rewards & streaks** keep it fun: earn coins, unlock cosmetics, celebrate at the win screen.
+  Drills mix whole-number, fraction, decimal, and powers-of-10 quick facts.
+- **Rewards you can SEE.** Earned hats float on the crewmate's head, pets follow it around
+  the ship, and the gold badge stars the name. Coins + streak bonuses + a cosmetics shop.
+- **Sound & juice.** Synth sound effects (correct/wrong/coin/fanfare/alarm — zero audio
+  assets) with a mute toggle, camera shake on sabotage, streak flames in the HUD.
 
 ## Tech
 
@@ -51,6 +65,11 @@ Everything is data-driven — **no game code changes needed**:
 - Add problems to `src/math/bank/<domain>.ts` (`problems: Problem[]`).
 - Add teaching cards to the same file (`lessons: Lesson[]`).
 - Tag each problem with a `tier` (1–4) so the adaptive engine places it by difficulty.
+- Give every problem 2–3 `solutions` (different strategies, full worked steps) — the
+  type system requires it, and `npm run validate` checks the whole bank (unique ids,
+  answers match choices, solution structure, tier coverage).
+
+Current bank: **400 problems** — 5.NF 80 · 5.NBT 68 · 5.MD 66 · bridge 66 · 5.OA 60 · 5.G 60.
 
 Key files:
 

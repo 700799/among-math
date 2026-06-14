@@ -1,22 +1,35 @@
 import Phaser from 'phaser';
 import { Theme, GAME_WIDTH, GAME_HEIGHT } from '../theme';
-import type { Domain } from '../math/types';
+import type { Domain, Problem } from '../math/types';
 import { DOMAIN_INFO } from '../math/types';
-import { getLessons, getTaskSet } from '../math/index';
+import { getLessons, pickProblem, getProblemById } from '../math/index';
 import { ProblemPanel } from '../ui/ProblemPanel';
-import { update, load, overallRit } from '../data/progress';
+import { update, load, overallRit, recordMiss, clearMiss } from '../data/progress';
 import { updateRit } from '../math/adaptive';
 import { awardForAnswer, awardTaskComplete } from '../game/Rewards';
+import { sfx } from '../ui/sfx';
 
 const MODAL_W = 640;
 const MODAL_H = 540;
+const SET_SIZE = 4;
 const PASS_RATIO = 0.6; // % correct needed to mark the task complete
 
-// A station task: first a kid-friendly lesson, then an adaptive problem set.
+interface TaskData {
+  domain?: Domain;     // station mode: which domain to practice
+  review?: boolean;    // review mode: replay missed problems from any domain
+}
+
+// A station task: first a kid-friendly lesson, then a LIVE-adaptive problem
+// set — each next question is picked from the kid's updated RIT, like MAP.
+// Also doubles as the "review missed problems" mode (entered from Report).
 export class TaskScene extends Phaser.Scene {
-  private domain!: Domain;
-  private set: ReturnType<typeof getTaskSet> = [];
+  private domain: Domain = '5.NF';
+  private review = false;
+  private reviewQueue: Problem[] = [];
+  private used = new Set<string>();
+  private lastCorrect: boolean | null = null;
   private idx = 0;
+  private total = SET_SIZE;
   private correct = 0;
   private panel?: ProblemPanel;
   private body!: Phaser.GameObjects.Container;
@@ -26,21 +39,34 @@ export class TaskScene extends Phaser.Scene {
     super('Task');
   }
 
-  create(data: { domain: Domain }) {
-    this.domain = data.domain;
+  create(data: TaskData) {
+    this.review = !!data.review;
+    this.domain = data.domain ?? '5.NF';
     this.idx = 0;
     this.correct = 0;
+    this.used = new Set();
+    this.lastCorrect = null;
 
-    // dim the ship
+    if (this.review) {
+      this.reviewQueue = load().missed
+        .map((id) => getProblemById(id))
+        .filter((p): p is Problem => !!p)
+        .slice(0, 6);
+      this.total = this.reviewQueue.length;
+    } else {
+      this.total = SET_SIZE;
+    }
+
+    // dim the ship (or stand alone when entered from Report)
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.55);
-    // modal
-    const modal = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, MODAL_W, MODAL_H, Theme.bgPanel)
-      .setStrokeStyle(3, Theme.accent);
-    modal.setOrigin(0.5);
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, MODAL_W, MODAL_H, Theme.bgPanel)
+      .setStrokeStyle(3, this.review ? Theme.warn : Theme.accent);
 
-    const info = DOMAIN_INFO[this.domain];
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - MODAL_H / 2 + 24, `${info.short} — ${info.label}`, {
-      fontFamily: 'Trebuchet MS', fontSize: '22px', color: Theme.css.accent, fontStyle: 'bold',
+    const title = this.review
+      ? '🔁 Review Missed Problems'
+      : `${DOMAIN_INFO[this.domain].short} — ${DOMAIN_INFO[this.domain].label}`;
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - MODAL_H / 2 + 24, title, {
+      fontFamily: 'Trebuchet MS', fontSize: '22px', color: this.review ? Theme.css.warn : Theme.css.accent, fontStyle: 'bold',
     }).setOrigin(0.5);
 
     this.progressText = this.add.text(GAME_WIDTH / 2 + MODAL_W / 2 - 16, GAME_HEIGHT / 2 - MODAL_H / 2 + 24, '', {
@@ -51,15 +77,20 @@ export class TaskScene extends Phaser.Scene {
     const close = this.add.text(GAME_WIDTH / 2 - MODAL_W / 2 + 16, GAME_HEIGHT / 2 - MODAL_H / 2 + 24, '✕', {
       fontFamily: 'Trebuchet MS', fontSize: '20px', color: Theme.css.bad,
     }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    close.on('pointerdown', () => this.leave());
+    close.on('pointerdown', () => { sfx.click(); this.leave(); });
 
     this.body = this.add.container(0, 0);
-    this.showLesson();
+
+    if (this.review) {
+      if (this.total === 0) { this.finishSet(); return; }
+      this.showProblem();
+    } else {
+      this.showLesson();
+    }
   }
 
   // ---- Lesson phase: flip through teaching cards before practicing ----
   private showLesson() {
-    this.body.removeAll(true);
     const lessons = getLessons(this.domain);
     const top = GAME_HEIGHT / 2 - MODAL_H / 2;
     const left = GAME_WIDTH / 2 - MODAL_W / 2;
@@ -103,76 +134,111 @@ export class TaskScene extends Phaser.Scene {
           align: 'center', wordWrap: { width: MODAL_W - 60 },
         }).setOrigin(0.5, 0);
         this.body.add(tip);
-        y += tip.height + 10;
       }
 
-      // nav: card x/n + next-or-start
+      // nav: card x/n, prev/next, start
       const by = GAME_HEIGHT / 2 + MODAL_H / 2 - 40;
-      this.body.add(this.add.text(GAME_WIDTH / 2, by - 24, `Lesson ${cardIdx + 1} of ${lessons.length}`, {
+      this.body.add(this.add.text(GAME_WIDTH / 2, by - 26, `Lesson ${cardIdx + 1} of ${lessons.length}`, {
         fontFamily: 'Trebuchet MS', fontSize: '13px', color: Theme.css.textDim,
       }).setOrigin(0.5));
 
-      if (cardIdx < lessons.length - 1) {
-        this.body.add(this.bigButton(GAME_WIDTH / 2 + 90, by, 'Next lesson ▶', Theme.accentDim, () => { cardIdx++; render(); }));
+      if (cardIdx > 0) {
+        this.body.add(this.bigButton(GAME_WIDTH / 2 - 230, by, '◀ Back', Theme.bgPanelLight, () => { sfx.click(); cardIdx--; render(); }, Theme.css.text));
       }
-      this.body.add(this.bigButton(GAME_WIDTH / 2 - 90, by, '▶ Start practice', Theme.good, () => this.startPractice()));
+      if (cardIdx < lessons.length - 1) {
+        this.body.add(this.bigButton(GAME_WIDTH / 2 + 160, by, 'Next lesson ▶', Theme.accentDim, () => { sfx.click(); cardIdx++; render(); }));
+      }
+      this.body.add(this.bigButton(GAME_WIDTH / 2 - 30, by, '▶ Start practice', Theme.good, () => { sfx.click(); this.startPractice(); }));
     };
     render();
   }
 
-  // ---- Practice phase ----
+  // ---- Practice phase (live adaptive) ----
   private startPractice() {
-    this.set = getTaskSet(this.domain, load().stats[this.domain].rit, 4);
     this.idx = 0;
     this.correct = 0;
+    this.used = new Set();
+    this.lastCorrect = null;
     this.showProblem();
+  }
+
+  private nextProblem(): Problem {
+    if (this.review) return this.reviewQueue[this.idx];
+    const rit = load().stats[this.domain].rit;
+    const p = pickProblem(this.domain, rit, this.used, this.lastCorrect);
+    this.used.add(p.id);
+    return p;
   }
 
   private showProblem() {
     this.body.removeAll(true);
     if (this.panel) { this.panel.destroy(); this.panel = undefined; }
 
-    if (this.idx >= this.set.length) { this.finishSet(); return; }
+    if (this.idx >= this.total) { this.finishSet(); return; }
 
-    this.progressText.setText(`Q ${this.idx + 1}/${this.set.length}`);
-    const problem = this.set[this.idx];
+    this.progressText.setText(`Q ${this.idx + 1}/${this.total}`);
+    const problem = this.nextProblem();
     this.panel = new ProblemPanel(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - MODAL_H / 2 + 70, {
       problem,
       width: MODAL_W,
-      onAnswered: (correct) => this.onAnswered(correct),
+      onAnswered: (correct) => this.onAnswered(problem, correct),
     });
   }
 
-  private onAnswered(correct: boolean) {
-    const problem = this.set[this.idx];
+  private onAnswered(problem: Problem, correct: boolean) {
     if (correct) this.correct++;
+    this.lastCorrect = correct;
     update((d) => {
-      const st = d.stats[this.domain];
+      const st = d.stats[problem.domain];
       st.attempts++;
       if (correct) st.correct++;
       st.rit = updateRit(st.rit, problem.tier, correct);
       if (st.rit > d.bestRit) d.bestRit = st.rit;
     });
-    awardForAnswer(correct);
+    if (correct) {
+      if (this.review) clearMiss(problem.id);
+    } else {
+      recordMiss(problem.id);
+    }
+    const coins = awardForAnswer(correct);
+    if (coins > 0) sfx.coin();
     this.idx++;
     this.showProblem();
   }
 
   private finishSet() {
     this.body.removeAll(true);
-    const ratio = this.correct / this.set.length;
+    if (this.panel) { this.panel.destroy(); this.panel = undefined; }
+    const cy = GAME_HEIGHT / 2;
+
+    if (this.review) {
+      const remaining = load().missed.length;
+      sfx.taskDone();
+      this.body.add(this.add.text(GAME_WIDTH / 2, cy - 60, this.total === 0 ? '🎉 Nothing to review!' : '🧠 Review complete!', {
+        fontFamily: 'Trebuchet MS', fontSize: '28px', color: Theme.css.good, fontStyle: 'bold',
+      }).setOrigin(0.5));
+      this.body.add(this.add.text(GAME_WIDTH / 2, cy - 14, this.total === 0
+        ? 'You have no missed problems saved. Go crush some tasks!'
+        : `You fixed ${this.correct} of ${this.total}. ${remaining ? `${remaining} still saved for next time.` : 'All caught up — amazing!'}`, {
+        fontFamily: 'Trebuchet MS', fontSize: '16px', color: Theme.css.text, align: 'center', wordWrap: { width: MODAL_W - 60 },
+      }).setOrigin(0.5));
+      this.body.add(this.bigButton(GAME_WIDTH / 2, cy + 50, '📋 Back to Report', Theme.accentDim, () => this.scene.start('Report')));
+      return;
+    }
+
+    const ratio = this.correct / this.total;
     const passed = ratio >= PASS_RATIO;
     if (passed) {
       update((d) => { d.stats[this.domain].completed = true; });
       awardTaskComplete();
+      sfx.taskDone();
     }
 
-    const cy = GAME_HEIGHT / 2;
     this.body.add(this.add.text(GAME_WIDTH / 2, cy - 80, passed ? '✅ Task Complete!' : '🔁 Keep practicing!', {
       fontFamily: 'Trebuchet MS', fontSize: '28px', color: passed ? Theme.css.good : Theme.css.warn, fontStyle: 'bold',
     }).setOrigin(0.5));
 
-    this.body.add(this.add.text(GAME_WIDTH / 2, cy - 30, `You got ${this.correct} of ${this.set.length} correct.`, {
+    this.body.add(this.add.text(GAME_WIDTH / 2, cy - 30, `You got ${this.correct} of ${this.total} correct.`, {
       fontFamily: 'Trebuchet MS', fontSize: '18px', color: Theme.css.text,
     }).setOrigin(0.5));
 
@@ -181,10 +247,10 @@ export class TaskScene extends Phaser.Scene {
     }).setOrigin(0.5));
 
     if (!passed) {
-      this.body.add(this.add.text(GAME_WIDTH / 2, cy + 34, `Get ${Math.ceil(this.set.length * PASS_RATIO)}+ right to finish this task.`, {
+      this.body.add(this.add.text(GAME_WIDTH / 2, cy + 34, `Get ${Math.ceil(this.total * PASS_RATIO)}+ right to finish this task.`, {
         fontFamily: 'Trebuchet MS', fontSize: '14px', color: Theme.css.textDim,
       }).setOrigin(0.5));
-      this.body.add(this.bigButton(GAME_WIDTH / 2 - 90, cy + 80, '🔁 Try again', Theme.warn, () => this.startPractice()));
+      this.body.add(this.bigButton(GAME_WIDTH / 2 - 90, cy + 80, '🔁 Try again', Theme.warn, () => { sfx.click(); this.startPractice(); }));
       this.body.add(this.bigButton(GAME_WIDTH / 2 + 90, cy + 80, 'Leave', Theme.accentDim, () => this.leave()));
     } else {
       this.body.add(this.bigButton(GAME_WIDTH / 2, cy + 70, '▶ Back to ship', Theme.good, () => this.leave()));
@@ -193,14 +259,18 @@ export class TaskScene extends Phaser.Scene {
 
   private leave() {
     if (this.panel) this.panel.destroy();
+    if (this.review) {
+      this.scene.start('Report');
+      return;
+    }
     this.scene.stop();
     this.scene.resume('Ship');
   }
 
-  private bigButton(x: number, y: number, label: string, color: number, onClick: () => void): Phaser.GameObjects.Container {
-    const w = Math.max(150, label.length * 11 + 24);
+  private bigButton(x: number, y: number, label: string, color: number, onClick: () => void, textColor = '#06121f'): Phaser.GameObjects.Container {
+    const w = Math.max(130, label.length * 10.5 + 24);
     const bg = this.add.rectangle(0, 0, w, 40, color).setStrokeStyle(2, Theme.text, 0.3).setInteractive({ useHandCursor: true });
-    const txt = this.add.text(0, 0, label, { fontFamily: 'Trebuchet MS', fontSize: '16px', color: '#06121f', fontStyle: 'bold' }).setOrigin(0.5);
+    const txt = this.add.text(0, 0, label, { fontFamily: 'Trebuchet MS', fontSize: '16px', color: textColor, fontStyle: 'bold' }).setOrigin(0.5);
     bg.on('pointerover', () => { bg.setScale(1.04); });
     bg.on('pointerout', () => { bg.setScale(1); });
     bg.on('pointerdown', onClick);

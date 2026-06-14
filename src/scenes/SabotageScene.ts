@@ -75,7 +75,7 @@ export class SabotageScene extends Phaser.Scene {
     this.panel = new ProblemPanel(this, GAME_WIDTH / 2, GAME_HEIGHT / 2 - 90, {
       problem: this.set[this.idx],
       width: 520,
-      compact: true,
+      mode: 'drill',
       onAnswered: (correct) => this.onAnswered(correct),
     });
   }

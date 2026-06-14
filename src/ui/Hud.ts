@@ -10,6 +10,7 @@ export class Hud {
   private scene: Phaser.Scene;
   private coinText: Phaser.GameObjects.Text;
   private taskText: Phaser.GameObjects.Text;
+  private streakText!: Phaser.GameObjects.Text;
   private ritFill: Phaser.GameObjects.Rectangle;
   private ritText: Phaser.GameObjects.Text;
   private barX = GAME_WIDTH - 250;
@@ -28,6 +29,11 @@ export class Hud {
 
     this.taskText = scene.add
       .text(120, 18, 'Tasks 0/6', { fontFamily: 'Trebuchet MS', fontSize: '15px', color: Theme.css.text })
+      .setOrigin(0, 0.5)
+      .setDepth(21);
+
+    this.streakText = scene.add
+      .text(240, 18, '', { fontFamily: 'Trebuchet MS', fontSize: '15px', color: Theme.css.warn, fontStyle: 'bold' })
       .setOrigin(0, 0.5)
       .setDepth(21);
 
@@ -54,6 +60,7 @@ export class Hud {
     this.coinText.setText(String(d.coins));
     const done = ALL_DOMAINS.filter((dom) => d.stats[dom].completed).length;
     this.taskText.setText(`Tasks ${done}/${ALL_DOMAINS.length}`);
+    this.streakText.setText(d.streak >= 3 ? `🔥 ${d.streak} streak!` : '');
 
     const rit = overallRit(d);
     const frac = Phaser.Math.Clamp((rit - RIT_MIN) / (RIT_MAX - RIT_MIN), 0, 1);

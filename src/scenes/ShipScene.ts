@@ -7,6 +7,7 @@ import { TaskStation } from '../game/TaskStation';
 import { Hud } from '../ui/Hud';
 import { load } from '../data/progress';
 import { ALL_DOMAINS } from '../math/index';
+import { sfx } from '../ui/sfx';
 
 // The spaceship hub. Walk around, complete task stations (math), survive the
 // occasional sabotage drill, and finish all tasks to win.
@@ -16,6 +17,7 @@ export class ShipScene extends Phaser.Scene {
   private bots: Bot[] = [];
   private hud!: Hud;
   private interactKey!: Phaser.Input.Keyboard.Key;
+  private interactKeyE!: Phaser.Input.Keyboard.Key;
   private escKey!: Phaser.Input.Keyboard.Key;
   private sabotageTimer?: Phaser.Time.TimerEvent;
   private banner!: Phaser.GameObjects.Text;
@@ -54,6 +56,7 @@ export class ShipScene extends Phaser.Scene {
       .setVisible(false);
 
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.interactKeyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     // Tapping a glowing station also starts it.
@@ -63,12 +66,14 @@ export class ShipScene extends Phaser.Scene {
     });
 
     // When we come back from a task/sabotage, refresh everything + check win.
-    this.events.on('resume', () => {
+    const onResume = () => {
       this.stations.forEach((s) => s.refresh());
       this.hud.refresh();
       this.checkVictory();
       this.scheduleSabotage();
-    });
+    };
+    this.events.on('resume', onResume);
+    this.events.once('shutdown', () => this.events.off('resume', onResume));
 
     this.scheduleSabotage();
     this.showHint('Walk to a glowing console and press SPACE to start a task!');
@@ -81,7 +86,9 @@ export class ShipScene extends Phaser.Scene {
     const near = this.nearestStation();
     this.stations.forEach((s) => s.setNearby(s === near));
 
-    if (near && Phaser.Input.Keyboard.JustDown(this.interactKey)) this.startTask(near);
+    if (near && (Phaser.Input.Keyboard.JustDown(this.interactKey) || Phaser.Input.Keyboard.JustDown(this.interactKeyE))) {
+      this.startTask(near);
+    }
     if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
       this.scene.start('Menu');
     }
@@ -109,7 +116,9 @@ export class ShipScene extends Phaser.Scene {
     const remaining = ALL_DOMAINS.filter((d) => !load().stats[d].completed).length;
     if (remaining === 0) return;
     this.sabotageTimer = this.time.delayedCall(Phaser.Math.Between(35000, 55000), () => {
+      sfx.alarm();
       this.banner.setText('⚠️  REACTOR SABOTAGE!  Solve fast to fix it!').setVisible(true);
+      this.cameras.main.shake(400, 0.004);
       this.time.delayedCall(1800, () => {
         this.banner.setVisible(false);
         this.scene.pause();
